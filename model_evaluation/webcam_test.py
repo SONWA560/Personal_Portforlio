@@ -82,7 +82,7 @@ def run_classifier(model):
     print(f" Confidence threshold: {CONFIDENCE_THRESHOLD*100}%")
 
     last_sound_time = 0
-    sound_cooldown = 1.5
+    sound_cooldown = 2.0
 
     while True:
         ret, frame = cap.read()
