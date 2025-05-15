@@ -1,253 +1,190 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import os
-from pathlib import Path
 import plotly.express as px
-import seaborn as sns
-import matplotlib.pyplot as plt
-from plotly.subplots import make_subplots
+import os
 
-# Set page config
-st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
+# === File paths ===
+BASE_DIR = "/Users/sonwabise/Documents/Anaconda/Python/venv/Multi Class classification"
+CM_FILE = os.path.join(BASE_DIR, "confusion_matrix.csv")
+CR_FILE = os.path.join(BASE_DIR, "classification_report.csv")
 
-# Initialize session state
-if 'pred_df' not in st.session_state:
-    st.session_state.pred_df = None
-if 'cm_df' not in st.session_state:
-    st.session_state.cm_df = None
-if 'cr_df' not in st.session_state:
-    st.session_state.cr_df = None
-
-# Path handling
-try:
-    SCRIPT_DIR = Path(__file__).parent.resolve()
-except:
-    SCRIPT_DIR = Path(os.getcwd())
-
-DATA_DIR = SCRIPT_DIR / "7-class"
-PRED_FILE = DATA_DIR / "detailed_predictions.csv"
-CM_FILE = DATA_DIR / "confusion_matrix.csv" 
-CR_FILE = DATA_DIR / "classification_report.csv"
-
-# Load data with column verification
+# === Load Data Once ===
+@st.cache_data
 def load_data():
-    # Load prediction data
-    if PRED_FILE.exists():
-        try:
-            df = pd.read_csv(PRED_FILE)
-            df.columns = df.columns.str.strip().str.lower()
-            
-            # Check for prediction column with multiple possible names
-            pred_col = None
-            possible_cols = ['predicted', 'prediction', 'predicted_label', 'predicted_class']
-            for col in possible_cols:
-                if col in df.columns:
-                    pred_col = col
-                    break
-            
-            if pred_col is None:
-                st.error(f"Could not find prediction column. Available columns: {df.columns.tolist()}")
-                return None, None, None
-            
-            # Standardize column names
-            df = df.rename(columns={pred_col: 'predicted'})
-            
-            # Verify required columns exist
-            required_cols = {'predicted', 'confidence', 'correct'}
-            missing_cols = required_cols - set(df.columns)
-            if missing_cols:
-                st.error(f"Missing required columns: {missing_cols}")
-                return None, None, None
-                
-            # Load other files
-            cm_df = pd.read_csv(CM_FILE, index_col=0) if CM_FILE.exists() else None
-            cr_df = pd.read_csv(CR_FILE, index_col=0) if CR_FILE.exists() else None
-            
-            return df, cm_df, cr_df
-            
-        except Exception as e:
-            st.error(f"Error loading data: {str(e)}")
-            return None, None, None
-    return None, None, None
-
-# Load data if not already loaded
-if st.session_state.pred_df is None:
-    st.session_state.pred_df, st.session_state.cm_df, st.session_state.cr_df = load_data()
-
-# Filters
-def add_filters():
-    st.sidebar.header("Filters")
-    
-    if st.session_state.pred_df is None:
-        return [], 0.0, "All"  # Return safe defaults when no data
-    
     try:
-        # Class filter
-        classes = st.session_state.pred_df['predicted'].unique().tolist()
-        selected_classes = st.sidebar.multiselect(
-            "Select classes",
-            options=classes,
-            default=classes
-        )
-        
-        # Confidence threshold
-        min_confidence = st.sidebar.slider(
-            "Minimum confidence",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.0,
-            step=0.05
-        )
-        
-        # Correctness filter
-        correctness_filter = st.sidebar.radio(
-            "Prediction correctness",
-            options=["All", "Correct only", "Incorrect only"],
-            index=0
-        )
-        
-        return selected_classes, min_confidence, correctness_filter
-        
+        cm_raw = pd.read_csv(CM_FILE, index_col=0)
+        cm_df = cm_raw.apply(pd.to_numeric, errors='coerce').fillna(0)
     except Exception as e:
-        st.error(f"Filter error: {str(e)}")
-        return [], 0.0, "All"
+        st.error(f"Error loading confusion matrix: {e}")
+        cm_df = None
 
-# Apply filters to data
-def apply_filters(df, selected_classes, min_confidence, correctness_filter):
-    if df is None:
-        return None
-        
-    filtered_df = df.copy()
-    
-    # Apply class filter
-    if selected_classes:
-        filtered_df = filtered_df[filtered_df['predicted'].isin(selected_classes)]
-    
-    # Apply confidence filter
-    filtered_df = filtered_df[filtered_df['confidence'] >= min_confidence]
-    
-    # Apply correctness filter
-    if correctness_filter == "Correct only":
-        filtered_df = filtered_df[filtered_df['correct']]
-    elif correctness_filter == "Incorrect only":
-        filtered_df = filtered_df[~filtered_df['correct']]
-    
-    return filtered_df
+    try:
+        cr_df = pd.read_csv(CR_FILE, index_col=0)
+    except Exception as e:
+        st.error(f"Error loading classification report: {e}")
+        cr_df = None
 
-# Visualization Functions (restored from your original)
-def class_distribution(df):
-    st.subheader("Class Distribution in Predictions")
-    class_counts = df['predicted'].value_counts()
-    fig, ax = plt.subplots(figsize=(10, 5))
-    sns.barplot(x=class_counts.index, y=class_counts.values, palette="viridis")
-    plt.xticks(rotation=45)
-    plt.ylabel("Count")
-    st.pyplot(fig)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Shows distribution of predictions across classes
-    - Balanced distribution indicates good representation
-    - Significant imbalances may require class weighting
-    """)
+    return cm_df, cr_df
 
-def confidence_analysis(df):
-    st.subheader("Confidence Analysis")
-    
-    # Histogram
-    fig1 = px.histogram(df, x="confidence", color="correct", 
-                       nbins=30, barmode="overlay",
-                       title="Confidence Distribution by Correctness")
-    st.plotly_chart(fig1, use_container_width=True)
-    
-    # Boxplot
-    fig2 = px.box(df, x="predicted", y="confidence", color="correct",
-                 title="Confidence by Class and Correctness")
-    st.plotly_chart(fig2, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Higher confidence for correct predictions indicates good calibration
-    - Overlapping distributions suggest areas for model improvement
-    - Classes with wider confidence ranges need investigation
-    """)
+# === Initialize session state ===
+if 'cm_df' not in st.session_state or 'cr_df' not in st.session_state:
+    st.session_state.cm_df, st.session_state.cr_df = load_data()
 
-def confusion_matrix_analysis():
+# === Confusion Matrix Page ===
+def confusion_matrix_page():
+    st.title("📈 Confusion Matrix Analysis")
+    
     if st.session_state.cm_df is None:
-        st.warning("No confusion matrix data available")
+        st.error("Confusion matrix data not available. Please check the data files.")
         return
     
-    st.subheader("Confusion Matrix Analysis")
+    st.sidebar.header("Confusion Matrix Filters")
+    norm_type = st.sidebar.radio("Normalization", 
+                                 ["Counts", "By True Class", "By Predicted Class"],
+                                 index=1)
     
-    # Normalized heatmap
-    norm_cm = st.session_state.cm_df.div(st.session_state.cm_df.sum(axis=1), axis=0)
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(norm_cm, annot=True, fmt=".1%", cmap="Blues")
-    plt.title("Normalized Confusion Matrix")
-    st.pyplot(fig)
+    cm = st.session_state.cm_df.copy()
     
+    if norm_type == "By True Class":
+        norm_cm = cm.div(cm.sum(axis=1), axis=0)
+        fmt = ".1%"
+        zmin, zmax = 0, 1
+    elif norm_type == "By Predicted Class":
+        norm_cm = cm.div(cm.sum(axis=0), axis=1)
+        fmt = ".1%"
+        zmin, zmax = 0, 1
+    else:
+        norm_cm = cm
+        fmt = "d"
+        zmin, zmax = None, None
+    
+    fig = px.imshow(norm_cm,
+                    labels=dict(x="Predicted", y="Actual", color="Count"),
+                    x=norm_cm.columns,
+                    y=norm_cm.index,
+                    text_auto=fmt,
+                    color_continuous_scale='Blues',
+                    zmin=zmin, zmax=zmax)
+    
+    fig.update_xaxes(side="top")
+    fig.update_layout(height=700)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    total = cm.values.sum()
+    correct = np.trace(cm.values)
+    accuracy = correct / total
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Overall Accuracy", f"{accuracy:.1%}", help="Percentage of all correct predictions")
+    with col2:
+        st.metric("Correct Predictions", f"{correct:,}", help="Total number of correct classifications")
+    with col3:
+        st.metric("Total Samples", f"{total:,}", help="Total number of predictions")
+
     st.markdown("""
     **Interpretation:**
-    - Diagonal shows correct classification rates
-    - Off-diagonal reveals common misclassifications
-    - Normalization accounts for class imbalance
+    - Diagonal elements show correct classifications (higher is better)
+    - Off-diagonal elements show misclassifications (lower is better)
+    - Normalized view helps compare performance across classes
+    - Common misclassification patterns reveal model weaknesses
+    - Ideal matrix would have all values on the diagonal
     """)
 
-# Pages
-def home_page():
-    st.title("🧠 Waste Classification Model Evaluation")
+    st.subheader("Top Misclassification Pairs")
+    misclass = cm.copy()
+    np.fill_diagonal(misclass.values, 0)
+    top_misclass = misclass.stack().sort_values(ascending=False).head(10).reset_index()
+    top_misclass.columns = ['Actual', 'Predicted', 'Count']
     
-    if st.session_state.pred_df is not None:
-        st.markdown("### Quick Statistics")
-        cols = st.columns(3)
-        with cols[0]:
-            accuracy = st.session_state.pred_df['correct'].mean()
-            st.metric("Accuracy", f"{accuracy:.1%}")
-        with cols[1]:
-            classes = st.session_state.pred_df['predicted'].nunique()
-            st.metric("Classes", classes)
-        with cols[2]:
-            conf = st.session_state.pred_df['confidence'].mean()
-            st.metric("Avg Confidence", f"{conf:.1%}")
+    fig2 = px.bar(top_misclass, 
+                  x='Count', 
+                  y='Actual', 
+                  color='Predicted',
+                  orientation='h',
+                  title="Most Common Misclassifications")
+    st.plotly_chart(fig2, use_container_width=True)
 
-def performance_page(selected_classes, min_confidence, correctness_filter):
-    st.title("📊 Model Performance")
+    st.markdown("""
+    **Interpretation:**
+    - Shows which classes are most frequently confused
+    - Pairs with high counts may need better feature differentiation
+    """)
+
+# === Classification Report Page ===
+def classification_report_page():
+    st.title("📝 Classification Report Analysis")
     
-    if st.session_state.pred_df is None:
-        st.error("No prediction data available")
+    if st.session_state.cr_df is None:
+        st.error("Classification report data not available. Please check the data files.")
         return
     
-    # Apply filters
-    filtered_df = apply_filters(st.session_state.pred_df, selected_classes, min_confidence, correctness_filter)
+    st.sidebar.header("Report Filters")
+    show_avg = st.sidebar.checkbox("Show Averages", value=True)
+    metric = st.sidebar.selectbox("Primary Metric", ["precision", "recall", "f1-score"], index=2)
     
-    if filtered_df is None or filtered_df.empty:
-        st.warning("No data matches the selected filters")
-        return
-    
-    # Visualizations
-    tab1, tab2 = st.tabs(["Distribution", "Confidence"])
-    
-    with tab1:
-        class_distribution(filtered_df)
-        
-    with tab2:
-        confidence_analysis(filtered_df)
-        
-    # Confusion matrix (not filtered)
-    confusion_matrix_analysis()
+    cr = st.session_state.cr_df.copy()
+    if not show_avg:
+        cr = cr.drop(index=["accuracy", "macro avg", "weighted avg"], errors='ignore')
 
-# Main app
+    fig = px.bar(cr, 
+                 y=cr.index, 
+                 x=[metric, "precision", "recall"],
+                 barmode='group',
+                 title="Classification Metrics by Class",
+                 labels={'value': 'Score', 'variable': 'Metric'})
+    
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+    fig.add_vline(x=0.9, line_dash="dot", line_color="red")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("""
+    **Interpretation:**
+    - Precision: When the model predicts this class, how often is it correct
+    - Recall: What percentage of actual class instances were identified correctly
+    - F1-score: Harmonic mean of precision and recall (ideal balance)
+    """)
+
+    st.subheader("Precision-Recall Tradeoff")
+    cr_filtered = cr.drop(index=["accuracy", "macro avg", "weighted avg"], errors='ignore')
+    
+    fig2 = px.scatter(cr_filtered,
+                      x='recall',
+                      y='precision',
+                      text=cr_filtered.index,
+                      size='f1-score',
+                      color='f1-score',
+                      hover_name=cr_filtered.index,
+                      title="Precision vs Recall by Class")
+    
+    fig2.update_traces(textposition='top center')
+    fig2.add_shape(type="line", x0=0, y0=1, x1=1, y1=0, line=dict(dash="dash"))
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Detailed Metrics")
+    st.dataframe(cr.style
+                 .background_gradient(subset=['precision', 'recall', 'f1-score'], cmap='YlGnBu')
+                 .format({'precision': '{:.1%}', 'recall': '{:.1%}', 'f1-score': '{:.1%}'}),
+                 height=600)
+    
+    st.markdown("""
+    **Key Metrics:**
+    - **Support**: Number of actual occurrences in dataset
+    - **Macro Avg**: Unweighted mean of all classes
+    - **Weighted Avg**: Support-weighted mean of all classes
+    - **Accuracy**: Overall correct prediction rate
+    """)
+
+# === Main App ===
 def main():
-    selected_classes, min_confidence, correctness_filter = add_filters()
-    
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Home", "Performance"])
-    
-    if page == "Home":
-        home_page()
-    elif page == "Performance":
-        performance_page(selected_classes, min_confidence, correctness_filter)
+    page = st.sidebar.radio("Go to", ["Confusion Matrix", "Classification Report"])
+
+    if page == "Confusion Matrix":
+        confusion_matrix_page()
+    elif page == "Classification Report":
+        classification_report_page()
 
 if __name__ == "__main__":
     main()
