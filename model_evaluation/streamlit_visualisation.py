@@ -8,11 +8,14 @@ import os
 # Set page config
 st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
-# File paths 
-DATA_DIR = DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-PRED_FILE = os.path.join(DATA_DIR, "detailed_predictions.csv")
-CM_FILE = os.path.join(DATA_DIR, "confusion_matrix.csv")
-CR_FILE = os.path.join(DATA_DIR, "classification_report.csv")
+# Get the directory of the current script
+SCRIPT_DIR = Path(__file__).parent.resolve()
+
+# Define data paths (works both locally and in deployment)
+DATA_DIR = SCRIPT_DIR / "data"
+PRED_FILE = DATA_DIR / "detailed_predictions.csv"
+CM_FILE = DATA_DIR / "confusion_matrix.csv"
+CR_FILE = DATA_DIR / "classification_report.csv"
 
 # Initialize session state for data persistence
 if 'pred_df' not in st.session_state:
