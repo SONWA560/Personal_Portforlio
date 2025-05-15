@@ -4,55 +4,71 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from pathlib import Path
 
-# Set page config
+# ====== Configuration ======
 st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
-# Get paths - works in both local and Streamlit Cloud
-BASE_DIR = os.getcwd()
-DATA_RELATIVE_PATH = os.path.join("model_evaluation", "7-class")
-
-# Construct full paths
-DATA_DIR = os.path.join(BASE_DIR, DATA_RELATIVE_PATH)
-PRED_FILE = os.path.join(DATA_DIR, "detailed_predictions.csv")
-CM_FILE = os.path.join(DATA_DIR, "confusion_matrix.csv")
-CR_FILE = os.path.join(DATA_DIR, "classification_report.csv")
-
-# Debug output
-with st.expander("Path Debug Info", expanded=False):
-    st.write(f"Base directory: {BASE_DIR}")
-    st.write(f"Data directory: {DATA_DIR}")
-    st.write(f"Data directory exists: {os.path.exists(DATA_DIR)}")
-    if os.path.exists(DATA_DIR):
-        st.write(f"Files in data directory: {os.listdir(DATA_DIR)}")
-
-# Initialize session state for data persistence
-if 'pred_df' not in st.session_state:
+# ====== Path Handling ======
+@st.cache_resource
+def get_data_paths():
+    """Robust path handling for both local and cloud deployment"""
     try:
-        if os.path.exists(PRED_FILE):
-            st.session_state.pred_df = pd.read_csv(PRED_FILE)
-            st.session_state.pred_df.columns = st.session_state.pred_df.columns.str.strip().str.lower()
-        else:
-            st.error(f"Prediction file not found at: {PRED_FILE}")
-            st.session_state.pred_df = None
+        base_path = Path(__file__).parent.resolve()
+    except Exception:
+        base_path = Path(os.getcwd())
+    
+    data_path = base_path / "7-class"
+    return {
+        "pred": data_path / "detailed_predictions.csv",
+        "cm": data_path / "confusion_matrix.csv",
+        "cr": data_path / "classification_report.csv"
+    }
+
+paths = get_data_paths()
+
+# ====== Data Loading ======
+@st.cache_data
+def load_data(file_path, _type="pred"):
+    """Cached data loading with error handling"""
+    try:
+        df = pd.read_csv(file_path)
+        if _type == "pred":
+            df.columns = df.columns.str.strip().str.lower()
+        return df
     except Exception as e:
-        st.error(f"Error loading prediction data: {str(e)}")
-        st.session_state.pred_df = None
+        st.error(f"Error loading {file_path.name}: {str(e)}")
+        return None
 
+# Initialize session state
+if 'data_loaded' not in st.session_state:
+    st.session_state.pred_df = load_data(paths["pred"])
+    st.session_state.cm_df = load_data(paths["cm"], "cm")
+    st.session_state.cr_df = load_data(paths["cr"], "cr")
+    st.session_state.data_loaded = all([
+        st.session_state.pred_df is not None,
+        st.session_state.cm_df is not None,
+        st.session_state.cr_df is not None
+    ])
 
-if 'cm_df' not in st.session_state:
-    try:
-        st.session_state.cm_df = pd.read_csv(CM_FILE, index_col=0)
-    except FileNotFoundError:
-        st.session_state.cm_df = None
-        st.error(f"Confusion matrix file not found at: {CM_FILE}")
+# ====== Debug Panel ======
+with st.expander("⚙️ Deployment Debug", expanded=False):
+    st.write("### Path Information")
+    st.json({
+        "working_directory": str(os.getcwd()),
+        "script_directory": str(Path(__file__).parent.resolve()),
+        "data_directory": str(paths["pred"].parent),
+        "files_found": [f.name for f in paths["pred"].parent.glob("*")] 
+    })
+    
+    if st.button("Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
 
-if 'cr_df' not in st.session_state:
-    try:
-        st.session_state.cr_df = pd.read_csv(CR_FILE, index_col=0)
-    except FileNotFoundError:
-        st.session_state.cr_df = None
-        st.error(f"Classification report file not found at: {CR_FILE}")
+if __name__ == "__main__":
+    # Add your main app logic here
+    st.title("Successfully Deployed Waste Classification Dashboard")
+    st.balloons()
 
 # Navigation function
 def navigation():
