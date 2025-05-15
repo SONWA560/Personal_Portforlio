@@ -10,12 +10,19 @@ st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
 # Get the directory of the current script
 SCRIPT_DIR = Path(__file__).parent.resolve()
+DATA_DIR = SCRIPT_DIR / "data"
 
-# Define data paths (works both locally and in deployment)
+# Define data paths 
 DATA_DIR = SCRIPT_DIR / "data"
 PRED_FILE = DATA_DIR / "detailed_predictions.csv"
 CM_FILE = DATA_DIR / "confusion_matrix.csv"
 CR_FILE = DATA_DIR / "classification_report.csv"
+
+# Debugging - show paths
+st.write(f"Checking data paths...")
+st.write(f"Script directory: {SCRIPT_DIR}")
+st.write(f"Data directory exists: {DATA_DIR.exists()}")
+st.write(f"Files in data directory: {[f.name for f in DATA_DIR.glob('*')] if DATA_DIR.exists() else 'N/A'}")
 
 # Initialize session state for data persistence
 if 'pred_df' not in st.session_state:
