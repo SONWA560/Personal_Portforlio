@@ -10,7 +10,7 @@ st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
 # Get paths - works in both local and Streamlit Cloud
 BASE_DIR = os.getcwd()
-DATA_RELATIVE_PATH = os.path.join("model_evaluation", "data")
+DATA_RELATIVE_PATH = os.path.join("model_evaluation", "7-class")
 
 # Construct full paths
 DATA_DIR = os.path.join(BASE_DIR, DATA_RELATIVE_PATH)
