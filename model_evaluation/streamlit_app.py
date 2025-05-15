@@ -8,14 +8,15 @@ import os
 # Set page config
 st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
-# Get the directory of the current script
-SCRIPT_DIR = Path(__file__).parent.resolve()
-DATA_DIR = SCRIPT_DIR / "7-class"
+# Get paths - works in both local and Streamlit Cloud
+BASE_DIR = os.getcwd()
+DATA_RELATIVE_PATH = os.path.join("model_evaluation", "7-class")
 
-# Define file paths
-PRED_FILE = DATA_DIR / "detailed_predictions.csv"
-CM_FILE = DATA_DIR / "confusion_matrix.csv" 
-CR_FILE = DATA_DIR / "classification_report.csv"
+# Construct full paths
+DATA_DIR = os.path.join(BASE_DIR, DATA_RELATIVE_PATH)
+PRED_FILE = os.path.join(DATA_DIR, "detailed_predictions.csv")
+CM_FILE = os.path.join(DATA_DIR, "confusion_matrix.csv")
+CR_FILE = os.path.join(DATA_DIR, "classification_report.csv")
 
 
 # Initialize session state for data persistence
