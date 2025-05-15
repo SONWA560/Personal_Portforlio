@@ -171,7 +171,6 @@ def home_page():
             total_pred = len(st.session_state.pred_df)
             st.metric("Total Predictions", total_pred)
 
-# Model Performance page
 def performance_page():
     st.title("📊 Model Performance")
     
@@ -179,72 +178,51 @@ def performance_page():
         st.error("Prediction data not available. Please check the data files.")
         return
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Confidence Analysis", "Accuracy Metrics", "Class Distribution", "Misclassification Insights"])
+    # Column verification
+    required_columns = {'confidence', 'correct'}
+    possible_pred_cols = ['predicted', 'prediction', 'predicted_class', 'class', 'predicted_label']
     
-    with tab1:
-        st.subheader("Prediction Confidence Histogram")
-        fig, ax = plt.subplots()
-        sns.histplot(data=st.session_state.pred_df, x="confidence", hue="correct", bins=30, 
-                    kde=True, palette="Set2", multiple="stack")
-        plt.title("Prediction Confidence by Correctness")
-        st.pyplot(fig)
-        
+    # Find which prediction column exists
+    pred_col = None
+    for col in possible_pred_cols:
+        if col in st.session_state.pred_df.columns:
+            pred_col = col
+            break
+    
+    # Verify all required columns exist
+    missing_cols = required_columns - set(st.session_state.pred_df.columns)
+    if missing_cols:
+        st.error(f"Missing required columns: {missing_cols}")
+        return
+    
+    if not pred_col:
+        st.error(f"Could not find prediction column. Tried: {possible_pred_cols}")
+        st.write("Available columns:", st.session_state.pred_df.columns.tolist())
+        return
+
+    # Now safe to plot
+    with st.expander("Debug Info", expanded=False):
+        st.write("Using prediction column:", pred_col)
+        st.write("Data sample:", st.session_state.pred_df[[pred_col, 'confidence', 'correct']].head())
+
+    try:
         st.subheader("Per-Class Confidence Distribution")
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.boxplot(data=st.session_state.pred_df, x='predicted', y="confidence", palette="Set3")
+        sns.boxplot(
+            data=st.session_state.pred_df,
+            x=pred_col,
+            y="confidence",
+            palette="Set3"
+        )
         plt.xticks(rotation=45)
-        plt.title("Confidence Distribution by Class")
+        plt.title(f"Confidence Distribution by {pred_col.title()} Class")
         st.pyplot(fig)
         
-        confidence_accuracy()
-    
-    with tab2:
-        st.subheader("Correct vs Incorrect Predictions")
-        correct_counts = st.session_state.pred_df["correct"].value_counts()
-        fig, ax = plt.subplots()
-        ax.pie(correct_counts, labels=correct_counts.index, autopct="%1.1f%%", 
-              startangle=90, colors=["#66c2a5", "#fc8d62"])
-        plt.title("Overall Prediction Correctness")
-        st.pyplot(fig)
-        
-        st.subheader("Confidence Statistics by Class")
-        conf_stats = st.session_state.pred_df.groupby('predicted')['confidence'].agg(
-            ['mean', 'std', 'count'])
-        st.dataframe(conf_stats.style.background_gradient(cmap='Blues'))
-    
-    with tab3:
-        class_distribution()
-        
-        st.subheader("Class-wise Accuracy")
-        class_acc = st.session_state.pred_df.groupby('predicted')['correct'].mean().sort_values()
-        fig, ax = plt.subplots(figsize=(10, 5))
-        sns.barplot(x=class_acc.index, y=class_acc.values, palette="viridis")
-        plt.xticks(rotation=45)
-        plt.ylabel("Accuracy")
-        plt.axhline(y=0.9, color='r', linestyle='--')
-        st.pyplot(fig)
-    
-    with tab4:
-        top_misclassifications()
-        
-        st.subheader("False Positive vs False Negative Rates")
-        cm = st.session_state.cm_df.copy()
-        total = cm.sum(axis=1)
-        fp = (cm.sum(axis=0) - np.diag(cm)) / total
-        fn = (cm.sum(axis=1) - np.diag(cm)) / total
-        
-        error_rates = pd.DataFrame({
-            'Class': cm.index,
-            'False Positive': fp,
-            'False Negative': fn
-        }).melt(id_vars='Class', var_name='Error Type', value_name='Rate')
-        
-        fig, ax = plt.subplots(figsize=(10, 5))
-        sns.barplot(data=error_rates, x='Class', y='Rate', hue='Error Type', palette="RdBu")
-        plt.xticks(rotation=45)
-        plt.title("Error Rates by Class")
-        st.pyplot(fig)
-
+    except Exception as e:
+        st.error(f"Error generating boxplot: {str(e)}")
+        st.write("Debug info:")
+        st.write("Unique values in prediction column:", st.session_state.pred_df[pred_col].unique())
+        st.write("Confidence stats:", st.session_state.pred_df["confidence"].describe())
 # Confusion Matrix page
 def confusion_matrix_page():
     st.title("📈 Confusion Matrix")
