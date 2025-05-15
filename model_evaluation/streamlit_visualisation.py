@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
 # File paths 
-DATA_DIR = "/Users/sonwabise/Documents/GitHub/Personal_Portforlio/model_evaluation/7-class"
+DATA_DIR = DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 PRED_FILE = os.path.join(DATA_DIR, "detailed_predictions.csv")
 CM_FILE = os.path.join(DATA_DIR, "confusion_matrix.csv")
 CR_FILE = os.path.join(DATA_DIR, "classification_report.csv")
