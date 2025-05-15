@@ -8,35 +8,37 @@ import os
 # Set page config
 st.set_page_config(page_title="7-Class Model Evaluation", layout="wide")
 
-# Get the directory of the current script
-SCRIPT_DIR = Path(__file__).parent.resolve()
-DATA_DIR = SCRIPT_DIR / "data"
+# Get paths - works in both local and Streamlit Cloud
+BASE_DIR = os.getcwd()
+DATA_RELATIVE_PATH = os.path.join("model_evaluation", "data")
 
-# Define data paths 
-DATA_DIR = SCRIPT_DIR / "data"
-PRED_FILE = DATA_DIR / "detailed_predictions.csv"
-CM_FILE = DATA_DIR / "confusion_matrix.csv"
-CR_FILE = DATA_DIR / "classification_report.csv"
+# Construct full paths
+DATA_DIR = os.path.join(BASE_DIR, DATA_RELATIVE_PATH)
+PRED_FILE = os.path.join(DATA_DIR, "detailed_predictions.csv")
+CM_FILE = os.path.join(DATA_DIR, "confusion_matrix.csv")
+CR_FILE = os.path.join(DATA_DIR, "classification_report.csv")
 
-# Debugging - show paths
-st.write(f"Checking data paths...")
-st.write(f"Script directory: {SCRIPT_DIR}")
-st.write(f"Data directory exists: {DATA_DIR.exists()}")
-st.write(f"Files in data directory: {[f.name for f in DATA_DIR.glob('*')] if DATA_DIR.exists() else 'N/A'}")
+# Debug output
+with st.expander("Path Debug Info", expanded=False):
+    st.write(f"Base directory: {BASE_DIR}")
+    st.write(f"Data directory: {DATA_DIR}")
+    st.write(f"Data directory exists: {os.path.exists(DATA_DIR)}")
+    if os.path.exists(DATA_DIR):
+        st.write(f"Files in data directory: {os.listdir(DATA_DIR)}")
 
 # Initialize session state for data persistence
 if 'pred_df' not in st.session_state:
     try:
-        st.session_state.pred_df = pd.read_csv(PRED_FILE)
-        st.session_state.pred_df.columns = st.session_state.pred_df.columns.str.strip().str.lower()
-        # Ensure we have a predicted column
-        possible_pred_cols = ['predicted', 'prediction', 'predicted_class', 'class', 'predicted_label']
-        pred_col = next((col for col in possible_pred_cols if col in st.session_state.pred_df.columns), None)
-        if pred_col and pred_col != 'predicted':
-            st.session_state.pred_df = st.session_state.pred_df.rename(columns={pred_col: 'predicted'})
-    except FileNotFoundError:
+        if os.path.exists(PRED_FILE):
+            st.session_state.pred_df = pd.read_csv(PRED_FILE)
+            st.session_state.pred_df.columns = st.session_state.pred_df.columns.str.strip().str.lower()
+        else:
+            st.error(f"Prediction file not found at: {PRED_FILE}")
+            st.session_state.pred_df = None
+    except Exception as e:
+        st.error(f"Error loading prediction data: {str(e)}")
         st.session_state.pred_df = None
-        st.error(f"Prediction data file not found at: {PRED_FILE}")
+
 
 if 'cm_df' not in st.session_state:
     try:
