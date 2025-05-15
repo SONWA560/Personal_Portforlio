@@ -47,157 +47,105 @@ if 'cr_df' not in st.session_state:
         st.session_state.cr_df = None
         st.error(f"Classification report file not found at: {CR_FILE}")
 
-# Add interactive filters in sidebar
+# Sidebar filters
 def add_filters():
     st.sidebar.header("Filters")
     if st.session_state.pred_df is not None:
-        # Class filter
         all_classes = st.session_state.pred_df['predicted'].unique()
-        selected_classes = st.sidebar.multiselect(
-            "Select classes to display",
-            options=all_classes,
-            default=all_classes
-        )
-        
-        # Confidence threshold
-        min_confidence = st.sidebar.slider(
-            "Minimum confidence level",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.0,
-            step=0.05
-        )
-        
-        # Correctness filter
-        correctness_filter = st.sidebar.radio(
-            "Prediction correctness",
-            options=["All", "Correct only", "Incorrect only"],
-            index=0
-        )
-        
+        selected_classes = st.sidebar.multiselect("Select classes to display", options=all_classes, default=all_classes)
+        min_confidence = st.sidebar.slider("Minimum confidence level", 0.0, 1.0, 0.0, 0.05)
+        correctness_filter = st.sidebar.radio("Prediction correctness", ["All", "Correct only", "Incorrect only"])
         return selected_classes, min_confidence, correctness_filter
     return None, None, None
 
-# Navigation function
+# Sidebar navigation
 def navigation():
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Home", "Model Performance", "Confusion Matrix", "Classification Report"])
-    return page
+    return st.sidebar.radio("Go to", ["Home", "Model Performance", "Confusion Matrix", "Classification Report"])
 
-# Visualization Functions with Plotly
+# Home Page
+def home_page():
+    st.title("🏠 7-Class Waste Classification Model Evaluation")
+    st.markdown("""
+    Welcome to the **Model Evaluation Dashboard** for the 7-Class Waste Classification project.
+
+    Use the sidebar to navigate between:
+    - **Model Performance**: Class distributions, confidence, and class-wise metrics
+    - **Confusion Matrix**: Analyze misclassifications
+    - **Classification Report**: Detailed precision, recall, F1-score
+
+    **Start by exploring how your model is performing across different metrics.**
+    """)
+
+    if st.session_state.pred_df is not None:
+        class_distribution()
+
+# Model Performance Page
+def performance_page(selected_classes, min_confidence, correctness_filter):
+    st.title("📊 Model Performance Analysis")
+    if st.session_state.pred_df is None:
+        st.error("Prediction data not loaded. Please ensure the detailed_predictions.csv file is available.")
+        return
+    class_distribution()
+    confidence_analysis(selected_classes, min_confidence, correctness_filter)
+    performance_metrics(selected_classes)
+
+# Class Distribution Plot
 def class_distribution():
     st.subheader("Class Distribution in Predictions")
     class_counts = st.session_state.pred_df['predicted'].value_counts().reset_index()
     class_counts.columns = ['Class', 'Count']
-    
     fig = px.bar(class_counts, x='Class', y='Count', color='Class',
                  title="Distribution of Predictions Across Classes")
     fig.update_layout(xaxis_title="Class", yaxis_title="Number of Predictions")
     st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Shows how predictions are distributed across different waste classes
-    - Balanced distribution suggests good representation in the dataset
-    - Skewed distribution may indicate class imbalance issues
-    - Ideally, all classes should have similar counts for balanced performance
-    """)
 
+# Confidence Analysis
 def confidence_analysis(selected_classes, min_confidence, correctness_filter):
     st.subheader("Confidence Analysis")
-    
-    # Apply filters
-    filtered_df = st.session_state.pred_df.copy()
-    filtered_df = filtered_df[filtered_df['predicted'].isin(selected_classes)]
-    filtered_df = filtered_df[filtered_df['confidence'] >= min_confidence]
-    
+    df = st.session_state.pred_df.copy()
+    df = df[df['predicted'].isin(selected_classes)]
+    df = df[df['confidence'] >= min_confidence]
+
     if correctness_filter == "Correct only":
-        filtered_df = filtered_df[filtered_df['correct']]
+        df = df[df['correct']]
     elif correctness_filter == "Incorrect only":
-        filtered_df = filtered_df[~filtered_df['correct']]
-    
-    # Confidence distribution
-    fig1 = px.histogram(filtered_df, x='confidence', color='correct',
-                       nbins=30, barmode='overlay',
-                       title="Prediction Confidence Distribution")
-    fig1.update_layout(xaxis_title="Confidence Score", yaxis_title="Count")
-    
-    # Confidence by class
-    fig2 = px.box(filtered_df, x='predicted', y='confidence', color='correct',
-                 title="Confidence Distribution by Class")
-    fig2.update_layout(xaxis_title="Class", yaxis_title="Confidence Score")
-    
+        df = df[~df['correct']]
+
+    fig1 = px.histogram(df, x='confidence', color='correct', nbins=30, barmode='overlay',
+                        title="Prediction Confidence Distribution")
+    fig2 = px.box(df, x='predicted', y='confidence', color='correct',
+                  title="Confidence Distribution by Class")
     st.plotly_chart(fig1, use_container_width=True)
     st.plotly_chart(fig2, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Confidence scores should be higher for correct predictions (good model calibration)
-    - Wide confidence ranges suggest uncertainty in some predictions
-    - Classes with consistently low confidence may need more training data
-    - The 0.9 threshold (red line) indicates our target confidence level
-    - Gaps between correct/incorrect distributions show model's discriminative power
-    """)
 
+# Performance Metrics
 def performance_metrics(selected_classes):
     st.subheader("Performance Metrics")
-    
-    # Calculate metrics
-    metrics_df = st.session_state.pred_df.groupby('predicted').agg(
+    df = st.session_state.pred_df
+    metrics = df.groupby('predicted').agg(
         accuracy=('correct', 'mean'),
         avg_confidence=('confidence', 'mean'),
         count=('predicted', 'count')
     ).reset_index()
-    metrics_df = metrics_df[metrics_df['predicted'].isin(selected_classes)]
-    
-    # Create subplots
+    metrics = metrics[metrics['predicted'].isin(selected_classes)]
     fig = make_subplots(rows=1, cols=2, subplot_titles=("Accuracy by Class", "Average Confidence by Class"))
-    
-    # Accuracy plot
-    fig.add_trace(
-        go.Bar(x=metrics_df['predicted'], y=metrics_df['accuracy'], 
-              name="Accuracy", marker_color='#636EFA'),
-        row=1, col=1
-    )
-    fig.add_hline(y=0.9, line_dash="dot", line_color="red", row=1, col=1)
-    
-    # Confidence plot
-    fig.add_trace(
-        go.Bar(x=metrics_df['predicted'], y=metrics_df['avg_confidence'], 
-              name="Avg Confidence", marker_color='#00CC96'),
-        row=1, col=2
-    )
-    fig.add_hline(y=0.9, line_dash="dot", line_color="red", row=1, col=2)
-    
-    fig.update_layout(showlegend=False, height=400)
+    fig.add_trace(go.Bar(x=metrics['predicted'], y=metrics['accuracy'], name="Accuracy", marker_color='blue'), row=1, col=1)
+    fig.add_trace(go.Bar(x=metrics['predicted'], y=metrics['avg_confidence'], name="Confidence", marker_color='green'), row=1, col=2)
+    fig.update_layout(height=400)
     st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Accuracy should be above the 0.9 threshold (red line) for all classes
-    - Classes below threshold need investigation (data quality or model limitations)
-    - Confidence should correlate with accuracy (higher confidence → higher accuracy)
-    - Large gaps between accuracy and confidence suggest calibration issues
-    - The relative performance across classes shows model strengths/weaknesses
-    """)
 
-# [Previous imports and setup code remains the same...]
-
+# Confusion Matrix Page
 def confusion_matrix_page():
     st.title("📈 Confusion Matrix Analysis")
-    
     if st.session_state.cm_df is None:
-        st.error("Confusion matrix data not available. Please check the data files.")
+        st.error("Confusion matrix not loaded.")
         return
-    
-    # Add confusion matrix filters
+
     st.sidebar.header("Confusion Matrix Filters")
-    norm_type = st.sidebar.radio("Normalization", 
-                               ["Counts", "By True Class", "By Predicted Class"],
-                               index=1)
-    
-    # Calculate normalized matrices
-    cm = st.session_state.cm_df
+    norm_type = st.sidebar.radio("Normalization", ["Counts", "By True Class", "By Predicted Class"], index=1)
+    cm = st.session_state.cm_df.copy()
+
     if norm_type == "By True Class":
         norm_cm = cm.div(cm.sum(axis=1), axis=0)
         fmt = ".1%"
@@ -210,158 +158,59 @@ def confusion_matrix_page():
         norm_cm = cm
         fmt = "d"
         zmin, zmax = None, None
-    
-    # Interactive confusion matrix
-    fig = px.imshow(norm_cm,
-                   labels=dict(x="Predicted", y="Actual", color="Count"),
-                   x=norm_cm.columns,
-                   y=norm_cm.index,
-                   text_auto=fmt,
-                   color_continuous_scale='Blues',
-                   zmin=zmin, zmax=zmax)
-    
+
+    fig = px.imshow(norm_cm, labels=dict(x="Predicted", y="Actual", color="Count"),
+                    x=norm_cm.columns, y=norm_cm.index, text_auto=fmt,
+                    color_continuous_scale='Blues', zmin=zmin, zmax=zmax)
     fig.update_xaxes(side="top")
     fig.update_layout(height=700)
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Performance metrics
+
+    # Accuracy
     total = cm.values.sum()
     correct = np.trace(cm)
-    accuracy = correct/total
-    
+    accuracy = correct / total
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Overall Accuracy", f"{accuracy:.1%}", 
-                help="Percentage of all correct predictions")
-    with col2:
-        st.metric("Correct Predictions", f"{correct:,}", 
-                help="Total number of correct classifications")
-    with col3:
-        st.metric("Total Samples", f"{total:,}", 
-                help="Total number of predictions")
-    
-    st.markdown("""
-    **Interpretation:**
-    - Diagonal elements show correct classifications (higher is better)
-    - Off-diagonal elements show misclassifications (lower is better)
-    - Normalized view helps compare performance across classes
-    - Common misclassification patterns reveal model weaknesses
-    - Ideal matrix would have all values on the diagonal
-    - Red values indicate frequent misclassifications needing attention
-    """)
-    
-    # Misclassification analysis
-    st.subheader("Top Misclassification Pairs")
-    misclass = cm.copy()
-    np.fill_diagonal(misclass.values, 0)
-    top_misclass = misclass.stack().sort_values(ascending=False).head(10).reset_index()
-    top_misclass.columns = ['Actual', 'Predicted', 'Count']
-    
-    fig2 = px.bar(top_misclass, 
-                 x='Count', 
-                 y='Actual', 
-                 color='Predicted',
-                 orientation='h',
-                 title="Most Common Misclassifications")
-    st.plotly_chart(fig2, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Shows which classes are most frequently confused
-    - Pairs with high counts may need better feature differentiation
-    - Similar-looking waste types often show up here
-    - Can guide data collection efforts for problematic pairs
-    - May indicate need for class merging in some cases
-    """)
+    col1.metric("Overall Accuracy", f"{accuracy:.1%}")
+    col2.metric("Correct Predictions", f"{correct:,}")
+    col3.metric("Total Samples", f"{total:,}")
 
+# Classification Report Page
 def classification_report_page():
     st.title("📝 Classification Report Analysis")
-    
     if st.session_state.cr_df is None:
-        st.error("Classification report data not available. Please check the data files.")
+        st.error("Classification report not available.")
         return
-    
-    # Add filters
+
     st.sidebar.header("Report Filters")
     show_avg = st.sidebar.checkbox("Show Averages", value=True)
-    metric = st.sidebar.selectbox("Primary Metric", 
-                                ["precision", "recall", "f1-score"],
-                                index=2)
-    
-    # Prepare data
-    cr = st.session_state.cr_df
+    metric = st.sidebar.selectbox("Primary Metric", ["precision", "recall", "f1-score"], index=2)
+
+    cr = st.session_state.cr_df.copy()
     if not show_avg:
         cr = cr.drop(index=["accuracy", "macro avg", "weighted avg"], errors='ignore')
-    
-    # Interactive metrics visualization
-    fig = px.bar(cr, 
-                y=cr.index, 
-                x=[metric, "precision", "recall"],
-                barmode='group',
-                title="Classification Metrics by Class",
-                labels={'value': 'Score', 'variable': 'Metric'})
-    
+
+    fig = px.bar(cr, y=cr.index, x=[metric, "precision", "recall"], barmode='group',
+                 labels={'value': 'Score', 'variable': 'Metric'})
     fig.update_layout(yaxis={'categoryorder':'total ascending'})
     fig.add_vline(x=0.9, line_dash="dot", line_color="red")
     st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Precision: When the model predicts this class, how often is it correct
-    - Recall: What percentage of actual class instances were identified correctly
-    - F1-score: Harmonic mean of precision and recall (ideal balance)
-    - The 0.9 threshold (red line) indicates our target performance level
-    - Classes below threshold need attention (data or model improvements)
-    - Large gaps between precision/recall suggest specific improvement areas
-    """)
-    
-    # Precision-Recall Analysis
-    st.subheader("Precision-Recall Tradeoff")
+
+    st.subheader("Precision vs Recall")
     cr_filtered = cr.drop(index=["accuracy", "macro avg", "weighted avg"], errors='ignore')
-    
-    fig2 = px.scatter(cr_filtered,
-                     x='recall',
-                     y='precision',
-                     text=cr_filtered.index,
-                     size='f1-score',
-                     color='f1-score',
-                     hover_name=cr_filtered.index,
-                     title="Precision vs Recall by Class")
-    
-    fig2.update_traces(textposition='top center')
+    fig2 = px.scatter(cr_filtered, x='recall', y='precision', text=cr_filtered.index,
+                      size='f1-score', color='f1-score', hover_name=cr_filtered.index)
     fig2.add_shape(type="line", x0=0, y0=1, x1=1, y1=0, line=dict(dash="dash"))
     st.plotly_chart(fig2, use_container_width=True)
-    
-    st.markdown("""
-    **Interpretation:**
-    - Upper right corner is ideal (high precision and recall)
-    - Diagonal line represents random guessing baseline
-    - Points below the diagonal suggest poor performance
-    - Larger bubbles indicate better F1 scores
-    - Can reveal classes needing precision vs recall optimization
-    """)
-    
-    # Detailed metrics table
-    st.subheader("Detailed Metrics")
-    st.dataframe(cr.style
-                .background_gradient(subset=['precision', 'recall', 'f1-score'], cmap='YlGnBu')
-                .format({'precision': '{:.1%}', 'recall': '{:.1%}', 'f1-score': '{:.1%}'}),
-                height=600)
-    
-    st.markdown("""
-    **Key Metrics:**
-    - **Support**: Number of actual occurrences in dataset
-    - **Macro Avg**: Unweighted mean of all classes
-    - **Weighted Avg**: Support-weighted mean of all classes
-    - **Accuracy**: Overall correct prediction rate
-    """)
 
+    st.subheader("Detailed Report")
+    st.dataframe(cr.style.background_gradient(subset=['precision', 'recall', 'f1-score'], cmap='YlGnBu')
+                 .format({'precision': '{:.1%}', 'recall': '{:.1%}', 'f1-score': '{:.1%}'}))
 
-# Main app logic
+# Main app
 def main():
     page = navigation()
     selected_classes, min_confidence, correctness_filter = add_filters()
-    
     if page == "Home":
         home_page()
     elif page == "Model Performance":
