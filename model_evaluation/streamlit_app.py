@@ -65,16 +65,16 @@ def navigation():
 
 # Home Page
 def home_page():
-    st.title("🏠 7-Class Waste Classification Model Evaluation")
+    st.title("7-Class Waste Classification Model Evaluation")
     st.markdown("""
     Welcome to the **Model Evaluation Dashboard** for the 7-Class Waste Classification project.
 
     Use the sidebar to navigate between:
     - **Model Performance**: Class distributions, confidence, and class-wise metrics
-    - **Confusion Matrix**: Analyze misclassifications
+    - **Confusion Matrix**: Analyse misclassifications
     - **Classification Report**: Detailed precision, recall, F1-score
 
-    **Start by exploring how your model is performing across different metrics.**
+    **Start by exploring how the model is performing across different metrics:**
     """)
 
     if st.session_state.pred_df is not None:
@@ -82,7 +82,7 @@ def home_page():
 
 # Model Performance Page
 def performance_page(selected_classes, min_confidence, correctness_filter):
-    st.title("📊 Model Performance Analysis")
+    st.title("Model Performance Analysis")
     if st.session_state.pred_df is None:
         st.error("Prediction data not loaded. Please ensure the detailed_predictions.csv file is available.")
         return
@@ -137,7 +137,7 @@ def performance_metrics(selected_classes):
 
 # Confusion Matrix Page
 def confusion_matrix_page():
-    st.title("📈 Confusion Matrix Analysis")
+    st.title("Confusion Matrix Analysis")
     if st.session_state.cm_df is None:
         st.error("Confusion matrix not loaded.")
         return
@@ -177,7 +177,7 @@ def confusion_matrix_page():
 
 # Classification Report Page
 def classification_report_page():
-    st.title("📝 Classification Report Analysis")
+    st.title("Classification Report Analysis")
     if st.session_state.cr_df is None:
         st.error("Classification report not available.")
         return
